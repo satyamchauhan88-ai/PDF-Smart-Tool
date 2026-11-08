@@ -37,18 +37,17 @@ android {
 }
 
 dependencies {
-    // Android core
+    // Android Core
     implementation("androidx.core:core-ktx:1.15.0")
-
-    // Android AppCompat
     implementation("androidx.appcompat:appcompat:1.7.0")
-
-    // Material Design
     implementation("com.google.android.material:material:1.12.0")
 
-    // OCR - English
+    // PDF Processing
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // English OCR
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
-    // OCR - Hindi (Devanagari)
+    // Hindi OCR (Devanagari)
     implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 }
