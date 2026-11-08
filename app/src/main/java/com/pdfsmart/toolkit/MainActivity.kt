@@ -1,3 +1,4 @@
+
 package com.pdfsmart.toolkit
 
 import android.app.Activity
@@ -26,7 +27,9 @@ import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.google.android.gms.tasks.Tasks
 
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import org.apache.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+
+import java.io.File
 
 class MainActivity : Activity() {
 
@@ -40,7 +43,7 @@ class MainActivity : Activity() {
     private val requestMergePdf = 1003
     private val requestSaveMergedPdf = 1004
 
-    private var selectedMergePdfs = mutableListOf<Uri>()
+    private val selectedMergePdfs = mutableListOf<Uri>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +53,9 @@ class MainActivity : Activity() {
         createHomeScreen()
     }
 
-    // ================= HOME SCREEN =================
+    // ---------------------------------------------------------
+    // HOME SCREEN
+    // ---------------------------------------------------------
 
     private fun createHomeScreen() {
 
@@ -152,12 +157,16 @@ class MainActivity : Activity() {
 
         val copyButton = Button(this).apply {
             text = "COPY EXTRACTED TEXT"
-            setOnClickListener { copyText() }
+            setOnClickListener {
+                copyText()
+            }
         }
 
         val saveButton = Button(this).apply {
             text = "SAVE TEXT AS TXT"
-            setOnClickListener { saveText() }
+            setOnClickListener {
+                saveText()
+            }
         }
 
         root.addView(copyButton)
@@ -168,56 +177,66 @@ class MainActivity : Activity() {
         setContentView(scroll)
     }
 
-    // ================= SELECT PDF FOR OCR =================
+    // ---------------------------------------------------------
+    // SELECT SINGLE PDF FOR OCR
+    // ---------------------------------------------------------
 
     private fun selectPdf() {
 
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/pdf"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         startActivityForResult(intent, requestPdf)
     }
 
-    // ================= SELECT MULTIPLE PDFS =================
+    // ---------------------------------------------------------
+    // SELECT MULTIPLE PDF FILES FOR MERGING
+    // ---------------------------------------------------------
 
     private fun selectPdfsToMerge() {
+
+        selectedMergePdfs.clear()
 
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/pdf"
+
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         startActivityForResult(intent, requestMergePdf)
     }
 
-    // ================= SAVE MERGED PDF =================
+    // ---------------------------------------------------------
+    // CREATE DESTINATION FOR MERGED PDF
+    // ---------------------------------------------------------
 
     private fun saveMergedPdf() {
-
-        if (selectedMergePdfs.size < 2) {
-
-            Toast.makeText(
-                this,
-                "Please select at least 2 PDF files",
-                Toast.LENGTH_LONG
-            ).show()
-
-            return
-        }
 
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/pdf"
-            putExtra(Intent.EXTRA_TITLE, "Merged_PDF.pdf")
+
+            putExtra(
+                Intent.EXTRA_TITLE,
+                "Merged_PDF.pdf"
+            )
         }
 
-        startActivityForResult(intent, requestSaveMergedPdf)
+        startActivityForResult(
+            intent,
+            requestSaveMergedPdf
+        )
     }
 
-    // ================= ACTIVITY RESULT =================
+    // ---------------------------------------------------------
+    // FILE PICKER CALLBACK
+    // ---------------------------------------------------------
 
     @Deprecated("Legacy file picker callback")
     override fun onActivityResult(
@@ -226,7 +245,11 @@ class MainActivity : Activity() {
         data: Intent?
     ) {
 
-        super.onActivityResult(requestCode, resultCode, data)
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        )
 
         if (resultCode != RESULT_OK || data == null) {
             return
@@ -250,6 +273,7 @@ class MainActivity : Activity() {
                 if (clipData != null) {
 
                     for (i in 0 until clipData.itemCount) {
+
                         selectedMergePdfs.add(
                             clipData.getItemAt(i).uri
                         )
@@ -262,52 +286,25 @@ class MainActivity : Activity() {
                     }
                 }
 
-                if (selectedMergePdfs.size >= 2) {
+                if (selectedMergePdfs.size < 2) {
 
                     Toast.makeText(
                         this,
-                        "${selectedMergePdfs.size} PDFs selected",
+                        "Select at least 2 PDF files",
                         Toast.LENGTH_LONG
                     ).show()
 
-                    saveMergedPdf()
-
-                } else {
-
-                    Toast.makeText(
-                        this,
-                        "Please select at least 2 PDFs",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    return
                 }
+
+                saveMergedPdf()
             }
 
             requestSaveText -> {
 
                 val uri = data.data ?: return
 
-                try {
-
-                    contentResolver.openOutputStream(uri)?.use {
-                        it.write(
-                            extractedText.toByteArray(Charsets.UTF_8)
-                        )
-                    }
-
-                    Toast.makeText(
-                        this,
-                        "Text saved successfully",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                } catch (e: Exception) {
-
-                    Toast.makeText(
-                        this,
-                        "Save failed: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                saveTextToUri(uri)
             }
 
             requestSaveMergedPdf -> {
@@ -319,75 +316,9 @@ class MainActivity : Activity() {
         }
     }
 
-    // ================= MERGE PDF FILES =================
-
-    private fun mergePdfs(outputUri: Uri) {
-
-        statusText.text = "Merging PDFs..."
-
-        Thread {
-
-            var outputDocument: PDDocument? = null
-
-            try {
-
-                outputDocument = PDDocument()
-
-                for (pdfUri in selectedMergePdfs) {
-
-                    contentResolver.openInputStream(pdfUri)?.use { input ->
-
-                        PDDocument.load(input).use { sourceDocument ->
-
-                            for (pageIndex in 0 until sourceDocument.numberOfPages) {
-
-                                outputDocument.addPage(
-                                    sourceDocument.getPage(pageIndex)
-                                )
-                            }
-                        }
-
-                    } ?: throw Exception("Unable to open selected PDF")
-                }
-
-                contentResolver.openOutputStream(outputUri)?.use { output ->
-
-                    outputDocument.save(output)
-                } ?: throw Exception("Unable to create output PDF")
-
-                runOnUiThread {
-
-                    statusText.text = "PDF merge completed"
-
-                    Toast.makeText(
-                        this,
-                        "PDFs merged successfully",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-
-            } catch (e: Exception) {
-
-                runOnUiThread {
-
-                    statusText.text = "PDF merge failed"
-
-                    Toast.makeText(
-                        this,
-                        "Merge error: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-
-            } finally {
-
-                outputDocument?.close()
-            }
-
-        }.start()
-    }
-
-    // ================= OCR PDF =================
+    // ---------------------------------------------------------
+    // OCR PDF - ENGLISH + HINDI
+    // ---------------------------------------------------------
 
     private fun runOcr(uri: Uri) {
 
@@ -411,9 +342,12 @@ class MainActivity : Activity() {
 
             try {
 
-                descriptor = contentResolver.openFileDescriptor(uri, "r")
+                descriptor =
+                    contentResolver.openFileDescriptor(uri, "r")
 
-                    ?: throw Exception("Unable to open PDF")
+                if (descriptor == null) {
+                    throw Exception("Unable to open PDF")
+                }
 
                 renderer = PdfRenderer(descriptor)
 
@@ -424,6 +358,7 @@ class MainActivity : Activity() {
                 for (pageIndex in 0 until totalPages) {
 
                     runOnUiThread {
+
                         statusText.text =
                             "Processing page ${pageIndex + 1} of $totalPages..."
                     }
@@ -436,12 +371,9 @@ class MainActivity : Activity() {
 
                         val scale = 2
 
-                        val width = page.width * scale
-                        val height = page.height * scale
-
                         bitmap = Bitmap.createBitmap(
-                            width,
-                            height,
+                            page.width * scale,
+                            page.height * scale,
                             Bitmap.Config.ARGB_8888
                         )
 
@@ -449,12 +381,18 @@ class MainActivity : Activity() {
 
                         page.render(
                             bitmap,
-                            Rect(0, 0, width, height),
+                            Rect(
+                                0,
+                                0,
+                                bitmap.width,
+                                bitmap.height
+                            ),
                             null,
                             PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
                         )
 
-                        val image = InputImage.fromBitmap(bitmap, 0)
+                        val image =
+                            InputImage.fromBitmap(bitmap, 0)
 
                         val englishResult =
                             Tasks.await(
@@ -467,7 +405,9 @@ class MainActivity : Activity() {
                             )
 
                         result.append("\n\n")
-                        result.append("===== PAGE ${pageIndex + 1} =====\n\n")
+                        result.append(
+                            "===== PAGE ${pageIndex + 1} =====\n\n"
+                        )
 
                         result.append(englishResult.text)
 
@@ -528,7 +468,124 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    // ================= COPY TEXT =================
+    // ---------------------------------------------------------
+    // MERGE PDF FILES
+    // ---------------------------------------------------------
+
+    private fun mergePdfs(outputUri: Uri) {
+
+        if (selectedMergePdfs.size < 2) {
+
+            Toast.makeText(
+                this,
+                "Please select at least 2 PDF files",
+                Toast.LENGTH_LONG
+            ).show()
+
+            return
+        }
+
+        statusText.text = "Merging PDFs..."
+
+        Thread {
+
+            var mergedDocument: PDDocument? = null
+
+            try {
+
+                mergedDocument = PDDocument()
+
+                for (uri in selectedMergePdfs) {
+
+                    val tempFile = File.createTempFile(
+                        "pdf_merge_",
+                        ".pdf",
+                        cacheDir
+                    )
+
+                    try {
+
+                        contentResolver.openInputStream(uri)?.use { input ->
+
+                            tempFile.outputStream().use { output ->
+
+                                input.copyTo(output)
+                            }
+
+                        } ?: throw Exception(
+                            "Cannot read selected PDF"
+                        )
+
+                        val sourceDocument =
+                            PDDocument.load(tempFile)
+
+                        try {
+
+                            for (
+                                pageIndex in 0 until
+                                sourceDocument.numberOfPages
+                            ) {
+
+                                val page =
+                                    sourceDocument.getPage(pageIndex)
+
+                                mergedDocument.importPage(page)
+                            }
+
+                        } finally {
+
+                            sourceDocument.close()
+                        }
+
+                    } finally {
+
+                        tempFile.delete()
+                    }
+                }
+
+                contentResolver.openOutputStream(outputUri)?.use {
+
+                    mergedDocument.save(it)
+
+                } ?: throw Exception(
+                    "Cannot save merged PDF"
+                )
+
+                runOnUiThread {
+
+                    statusText.text = "PDF merge completed"
+
+                    Toast.makeText(
+                        this,
+                        "PDFs merged successfully",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+
+            } catch (e: Exception) {
+
+                runOnUiThread {
+
+                    statusText.text = "PDF merge failed"
+
+                    Toast.makeText(
+                        this,
+                        "Merge error: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+
+            } finally {
+
+                mergedDocument?.close()
+            }
+
+        }.start()
+    }
+
+    // ---------------------------------------------------------
+    // COPY EXTRACTED TEXT
+    // ---------------------------------------------------------
 
     private fun copyText() {
 
@@ -544,7 +601,8 @@ class MainActivity : Activity() {
         }
 
         val clipboard =
-            getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            getSystemService(CLIPBOARD_SERVICE)
+                as ClipboardManager
 
         clipboard.setPrimaryClip(
             ClipData.newPlainText(
@@ -560,7 +618,9 @@ class MainActivity : Activity() {
         ).show()
     }
 
-    // ================= SAVE OCR TEXT =================
+    // ---------------------------------------------------------
+    // SAVE TEXT AS TXT
+    // ---------------------------------------------------------
 
     private fun saveText() {
 
@@ -575,12 +635,58 @@ class MainActivity : Activity() {
             return
         }
 
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TITLE, "OCR_Result.txt")
-        }
+        val intent =
+            Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
 
-        startActivityForResult(intent, requestSaveText)
+                addCategory(Intent.CATEGORY_OPENABLE)
+
+                type = "text/plain"
+
+                putExtra(
+                    Intent.EXTRA_TITLE,
+                    "OCR_Result.txt"
+                )
+            }
+
+        startActivityForResult(
+            intent,
+            requestSaveText
+        )
+    }
+
+    // ---------------------------------------------------------
+    // WRITE EXTRACTED TEXT TO FILE
+    // ---------------------------------------------------------
+
+    private fun saveTextToUri(uri: Uri) {
+
+        try {
+
+            contentResolver.openOutputStream(uri)?.use {
+
+                it.write(
+                    extractedText.toByteArray(
+                        Charsets.UTF_8
+                    )
+                )
+
+            } ?: throw Exception(
+                "Unable to open output file"
+            )
+
+            Toast.makeText(
+                this,
+                "Text saved successfully",
+                Toast.LENGTH_LONG
+            ).show()
+
+        } catch (e: Exception) {
+
+            Toast.makeText(
+                this,
+                "Save failed: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 }
