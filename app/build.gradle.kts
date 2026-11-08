@@ -1,3 +1,4 @@
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -36,7 +37,18 @@ android {
 }
 
 dependencies {
+    // Android core
     implementation("androidx.core:core-ktx:1.15.0")
+
+    // Android AppCompat
     implementation("androidx.appcompat:appcompat:1.7.0")
+
+    // Material Design
     implementation("com.google.android.material:material:1.12.0")
+
+    // OCR - English
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
+    // OCR - Hindi (Devanagari)
+    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
 }
